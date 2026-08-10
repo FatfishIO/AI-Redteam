@@ -259,4 +259,46 @@ class ChunkTriage:
         
         for i, (idx, score) in enumerate(sorted_results[:10]):
             d_rank = density_rank.get(idx, '-')
-            p_rank = pw_
+            p_rank = pw_rank.get(idx, '-')
+            r_rank = recon_rank.get(idx, '-')
+            print(f"  {i+1:4d}   [{idx:3d}]    {score:.6f}  #{d_rank:3s}      #{p_rank:3s}      #{r_rank:3s}")
+        
+        # Statistics
+        scores_values = list(scores.values())
+        print(f"\n  Score distribution ({len(scores_values)} chunks):")
+        print(f"    max={max(scores_values):.6f}  mean={np.mean(scores_values):.6f}  "
+              f"median={np.median(scores_values):.6f}  min={min(scores_values):.6f}")
+        
+        return sorted_results
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('embeddings_file', help='Path to embeddings.npy')
+    parser.add_argument('--model', default='sentence-transformers/all-MiniLM-L6-v2',
+                        help='Embedding model name')
+    args = parser.parse_args()
+    
+    print("[*] Pipeline stages: density -> pw -> recon")
+    
+    triage = ChunkTriage(args.model)
+    embeddings = triage.load_embeddings(args.embeddings_file)
+    
+    start_time = time.time()
+    
+    # Stage 1: Density
+    density_results = triage.stage1_density(top_k=50)
+    
+    # Stage 2: Pairwise
+    pw_results = triage.stage2_pairwise(density_results, top_k=20)
+    
+    # Stage 3: Reconstruction
+    recon_results = triage.stage3_reconstruction(pw_results, top_k=20)
+    
+    # Fusion
+    fused_results = triage.fuse_results(density_results, pw_results, recon_results)
+    
+    total_time = time.time() - start_time
+    print(f"\n  Total pipeline time: {total_time:.1f}s")
+
+if __name__ == "__main__":
+    main()
